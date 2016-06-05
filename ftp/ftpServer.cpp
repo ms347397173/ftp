@@ -1,4 +1,5 @@
 //ftp server
+#include"Trace.h"
 #include<iostream>
 #include<sys/types.h>
 #include<sys/socket.h>
@@ -64,7 +65,7 @@ int Init(unsigned short port)
 }
 
 //path is ftp main directory
-void Accept(SOCKET sock,string path)
+void Accept(SOCKET sock,string path,vector<string>& fileList)
 {
 	struct sockaddr_in remote_addr;
     //memset(&remote_addr,0,sizeof(remote_addr));
@@ -85,71 +86,45 @@ void Accept(SOCKET sock,string path)
 	cout<<"accepted client "<<inet_ntoa(remote_addr.sin_addr)<<endl;
 
 	//get file list from file system
-	vector<string> fileList;
  
     string path2= "ls " + path+ " | grep \".*\" > /home/m/ftp/filelist.txt ";
 
 	system(path2.c_str());
 
-    //FILE* fp;
-
-	//fp=fopen("/home/m/ftp/filelist.txt","r");
-
-	//string tmp;
-   // cout<<"File List :"<<endl;
-	//char filename[256]={0};
-	//while(!feof(fp))
-	//{
-    //    fgets(filename,256,fp);
-    //    cout<<filename<<endl;
-	//    fileList.push_back(string(filename));
-	//}
-	// send file list to client
 #ifdef __DEBUG__
 	cout<<"File List:"<<endl;
 #endif
 	ReadFileList(string("/home/m/ftp/filelist.txt"),fileList);
-#ifdef __DEBUG__
-	for(int i=0;i<fileList.size();++i)
-	{
-		cout<<fileList[i]<<endl;
-	}
-#endif
+
 	char sendBuf[BUFSIZ];
 	memset(sendBuf,0,sizeof(char)*BUFSIZ);
 	
-    char str[20];
-        
+   	char str[20];
+
+	__TRACE__("file list:\n");
+
 	for(int i=0;i<fileList.size();++i)
 	{
-	//    memset(str,0,sizeof(str));
-	//    sprintf(str,"%d ",i);	
-    //    fileList[i]=str+fileList[i];
-	    strcpy(sendBuf,fileList[i].c_str());
-        send(fd,sendBuf,strlen(sendBuf)+1,0);
+	   __TRACE__("%s",fileList[i].c_str());
+	   strcpy(sendBuf,fileList[i].c_str());
+     	   send(fd,sendBuf,strlen(sendBuf)+1,0);
 	}
 
 	send(fd,"fileList\nend",13,0);
 
-	//fileList finished
-	
 	int number=inputNumber(fd);
-	//find file name
-	//string::iterator it=fileList[number].begin();
-	//while(*it!=' ') ;
-	//++it;
-	//string tmp(it,fileList[number].end());
+	__TRACE__("file number:%d",number);
 
 	string filepath=path+"/"+fileList[number];
 
-	//download
 	if(Download(fd,filepath))
-		cout<<"download failed!!"<<endl;
+		__TRACE__("download failed!!\n");
+		//cout<<"download failed!!"<<endl;
 	else
-		cout<<"download success!!"<<endl;
+		__TRACE__("download success!!\n");
+		//cout<<"download success!!"<<endl;
 		
 
-	 
 }
 
 bool Download(SOCKET s,string path)
@@ -158,7 +133,7 @@ bool Download(SOCKET s,string path)
 	char sendBuf[BUFSIZ+1]={0};
 
 #ifndef __DEBUG__
-	cout<<path<<endl;
+	cout<<"file path:"<<path<<endl;
 #endif
 
 	if(!fp)
@@ -169,6 +144,7 @@ bool Download(SOCKET s,string path)
 		if(len<BUFSIZ)
 		{
 			send(s,sendBuf,len,0);
+			cout<<"len:"<<len<<endl;
 			break;
 		}
 		if(len<1)
@@ -204,6 +180,9 @@ int inputNumber(SOCKET s)
 	{
 		num=atoi(recBuf_num);
 	}
+#ifdef __DEBUG__
+cout<<"receive num:"<<num<<endl;
+#endif
 	return num;
 	
 }
@@ -211,12 +190,13 @@ int inputNumber(SOCKET s)
 int main()
 {
 
+   vector<string> fileList;
    int r=Init(8000);
    if(r<0)
    {
 	   cout<<"init error"<<endl;
    }
 
-   Accept(r,string("/home/m/ftpFile"));
+   Accept(r,string("/home/m/ftpFile"),fileList);
    return 0;
 }

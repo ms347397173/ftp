@@ -148,8 +148,12 @@ bool Download(SOCKET s,string path)
 			break;
 		}
 		if(len<1)
+		{
+			//send a empty packet
+			memset(sendBuf,0,BUFSIZ);
+			send(s,sendBuf,0,0);
 			break;
-
+		}
 		send(s,sendBuf,len,0);
 		cout<<"len:"<<len<<endl;
 	}
@@ -189,14 +193,15 @@ cout<<"receive num:"<<num<<endl;
 
 int main()
 {
-
-   vector<string> fileList;
-   int r=Init(8000);
-   if(r<0)
+   while(1)
    {
-	   cout<<"init error"<<endl;
+		vector<string> fileList;
+		int r=Init(8000);  //listen wait 
+		if(r<0)
+		{
+		    cout<<"init error"<<endl;
+	    }
+		Accept(r,string("/home/m/ftpFile"),fileList);  //add code for child  process
    }
-
-   Accept(r,string("/home/m/ftpFile"),fileList);
    return 0;
 }

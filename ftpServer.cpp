@@ -1,4 +1,5 @@
 //ftp server
+#define __DEBUG__
 #include"Trace.h"
 #include<iostream>
 #include<sys/types.h>
@@ -10,6 +11,7 @@
 #include<string>
 #include<vector>
 #include<fstream>
+#include<unistd.h>
 #include<stdio.h>
 #ifndef BUFSIZ
 #define BUFSIZ 512
@@ -19,11 +21,11 @@
 typedef int SOCKET;
 #endif
 
-#define __DEBUG__
 
 
 using namespace std;
 
+bool sendFileList(SOCKET fd,vector<string> & file_list);
 bool Download(SOCKET s,string path);
 int inputNumber(SOCKET s);
 void ReadFileList(string path,vector<string> & v);
@@ -64,6 +66,17 @@ int Init(unsigned short port)
 	
 }
 
+bool GetFileList(const string & file_path,vector<string> & v)
+{
+    string path= "ls " + file_path+ " | grep \".*\" > ./filelist.txt ";
+
+	//get file list from file system
+	system(path.c_str());
+	__TRACE__("File List:\n");
+	ReadFileList(string("./filelist.txt"),v);
+}
+
+
 //path is ftp main directory
 void Accept(SOCKET sock,string path,vector<string>& fileList)
 {
@@ -75,26 +88,62 @@ void Accept(SOCKET sock,string path,vector<string>& fileList)
 		cerr<<"sock<0 Accept Error"<<endl;
 		return ;
 	}
-	int sin_size=sizeof(struct sockaddr_in);
-	int fd=accept(sock,(struct sockaddr *)&remote_addr,&sin_size);
-	if(fd<0)
+	int sin_size;
+	int fd;
+
+	while(1)
 	{
-		cerr<<"accept error"<<endl;
-		return ;
+		sin_size=sizeof(struct sockaddr_in);
+		fd=accept(sock,(struct sockaddr *)&remote_addr,&sin_size);
+		if(fd<0)
+		{
+			cerr<<"accept error"<<endl;
+			return ;
+		}
+
+		cout<<"accepted client "<<inet_ntoa(remote_addr.sin_addr)<<endl;
+	
+		//add code for child process
+
+		pid_t pid=fork();
+		if(pid==-1)
+			return ;
+		else if(pid==0)  //child process execute download
+		{
+	
+			GetFileList(path,fileList);
+
+			sendFileList(fd,fileList);
+
+			int number=inputNumber(fd);
+			__TRACE__("file number:%d",number);
+
+			string filepath=path+"/"+fileList[number];
+
+			if(Download(fd,filepath))
+			{
+				cout<<"download failed!!\n";
+				//cout<<"download failed!!"<<endl;
+			}
+			else
+			{
+				cout<<"download success!!\n";
+				//cout<<"download success!!"<<endl;
+			}
+			return ;
+		}
+		else  //father 
+		{
+			continue; //father process continue
+		}
+
 	}
+}
 
-	cout<<"accepted client "<<inet_ntoa(remote_addr.sin_addr)<<endl;
-
-	//get file list from file system
- 
-    string path2= "ls " + path+ " | grep \".*\" > /home/m/ftp/filelist.txt ";
-
-	system(path2.c_str());
-
-#ifdef __DEBUG__
-	cout<<"File List:"<<endl;
-#endif
-	ReadFileList(string("/home/m/ftp/filelist.txt"),fileList);
+bool sendFileList(SOCKET fd,vector<string> & fileList)
+{
+	if(fd<0)
+		return false;
 
 	char sendBuf[BUFSIZ];
 	memset(sendBuf,0,sizeof(char)*BUFSIZ);
@@ -107,24 +156,11 @@ void Accept(SOCKET sock,string path,vector<string>& fileList)
 	{
 	   __TRACE__("%s",fileList[i].c_str());
 	   strcpy(sendBuf,fileList[i].c_str());
-     	   send(fd,sendBuf,strlen(sendBuf)+1,0);
+       send(fd,sendBuf,strlen(sendBuf)+1,0);
 	}
 
 	send(fd,"fileList\nend",13,0);
-
-	int number=inputNumber(fd);
-	__TRACE__("file number:%d",number);
-
-	string filepath=path+"/"+fileList[number];
-
-	if(Download(fd,filepath))
-		__TRACE__("download failed!!\n");
-		//cout<<"download failed!!"<<endl;
-	else
-		__TRACE__("download success!!\n");
-		//cout<<"download success!!"<<endl;
-		
-
+	return true;
 }
 
 bool Download(SOCKET s,string path)
@@ -132,9 +168,7 @@ bool Download(SOCKET s,string path)
 	FILE * fp=fopen(path.c_str(),"rb");
 	char sendBuf[BUFSIZ+1]={0};
 
-#ifndef __DEBUG__
-	cout<<"file path:"<<path<<endl;
-#endif
+	__TRACE__("file path: %s \n  fp=%p\n",path.c_str(),fp);
 
 	if(!fp)
 		return false;
@@ -144,7 +178,7 @@ bool Download(SOCKET s,string path)
 		if(len<BUFSIZ)
 		{
 			send(s,sendBuf,len,0);
-			cout<<"len:"<<len<<endl;
+	//		__TRACE__("len:%d\n",len);
 			break;
 		}
 		if(len<1)
@@ -155,7 +189,7 @@ bool Download(SOCKET s,string path)
 			break;
 		}
 		send(s,sendBuf,len,0);
-		cout<<"len:"<<len<<endl;
+	   	__TRACE__("len:%d\n",len);
 	}
 	return true;
 }
@@ -184,24 +218,21 @@ int inputNumber(SOCKET s)
 	{
 		num=atoi(recBuf_num);
 	}
-#ifdef __DEBUG__
-cout<<"receive num:"<<num<<endl;
-#endif
+
+	__TRACE__("receive num: %d\n",num);
+
 	return num;
 	
 }
 
-int main()
+int main(int argc,char * argv[])   
 {
-   while(1)
-   {
-		vector<string> fileList;
-		int r=Init(8000);  //listen wait 
-		if(r<0)
-		{
-		    cout<<"init error"<<endl;
-	    }
-		Accept(r,string("/home/m/ftpFile"),fileList);  //add code for child  process
-   }
-   return 0;
+	vector<string> fileList;
+	int r=Init(8000);  //listen over
+	if(r<0)
+	{
+		cout<<"init error"<<endl;
+    }
+	Accept(r,string("/home/m/ftpFile"),fileList);  //add code for child  process
+    return 0;
 }

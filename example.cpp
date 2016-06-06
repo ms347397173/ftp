@@ -1,17 +1,16 @@
-
+#define __DEBUG__
 #include<iostream>
 #include<fstream>
-
+#include"Trace.h"
 #include<string>
 
 using namespace std;
 
 int main()
 {
-	fstream fs;
-	fs.open("/home/m/ftpFile.txt",ios::in);
-    string tmp= fs.getline();
-	cout<<tmp<<endl;
+
+	__TRACE__("hello");
+
 	return 0;
 }
 
